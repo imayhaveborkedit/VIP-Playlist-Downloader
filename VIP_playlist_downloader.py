@@ -1,6 +1,6 @@
 from ctypes import windll, create_string_buffer
 import xml.etree.ElementTree as ET
-import sys, os, os.path, requests, urllib2, struct, argparse, re
+import sys, os, os.path, math, requests, urllib2, struct, argparse, re
 
 # EVENTUAL TRANSCODING WILL USE THIS: https://github.com/devsnd/python-audiotranscode
 
@@ -10,6 +10,7 @@ namehacks = {
 
     # .dothack
     '^\.hack': 'dothack',
+    # '^dothack\S': 'dothack - ', # kasdjfkajsbdflkbsadf
 
     # Original Version despacing & parenthesizing
     '  Original Version': ' (Original Version)',
@@ -44,7 +45,11 @@ def getPrettyFileSizes(fsize, size = None):
     frd = lambda s,d: round(float(s)/1000**d,2)
     sizelist = { 'B' : fsize, 'KB' : frd(fsize,1), 'MB' : frd(fsize,2), 'GB' : frd(fsize,3)}
     if size is None:
-        return sizelist
+        if fsize < 1.0: return 0, 'B'
+        for sls in sizelist:
+            if 1 <= sizelist[sls] <= 1000:
+                return sizelist[sls], sls
+        return sizelist['MB'], 'MB' # bleh testing is too hard
     else:
         return sizelist.get(size)
 
@@ -111,14 +116,20 @@ def apply_namehacks(filename):
 class Song(object):
     import requests
 
-    def __init__(self, creator, title, location, getfsizes=False):
+    def __init__(self, creator, title, location, getfsizes=False, verbose=False):
+        self.verbose = verbose
+
         self.creator = creator
         self.title = title
         self.location = location
 
         self.filename = creator + ' - ' + title + '.m4a'
+        self.raw_filename = self.filename
+        self.vlog("Creating filename: %s -> %s" % (self.location, self.filename))
+
         self.filename = self.filename.replace('"',"'")
         self.filename = ''.join([c for c in self.filename if c not in '\/:*?<>|'])
+        self.vlog("Sanitizing filename: %s -> %s" % (self.raw_filename, self.filename))
 
         self._filesize = None
         self._human_filesize = None
@@ -127,10 +138,12 @@ class Song(object):
             self._filesize = self.filesize
             self._human_filesize = self.human_filesize
 
+
     @property
     def filesize(self):
         if not self._filesize:
             self._filesize = int(requests.head(self.location).headers['content-length'])
+            self.vlog("Got filesize for '%s': %s" % (self.filename, self._filesize))
 
         return self._filesize
 
@@ -138,6 +151,7 @@ class Song(object):
     def human_filesize(self):
         if not self._human_filesize:
             self._human_filesize = str(getPrettyFileSizes(self.filesize, 'MB')) + ' MB'
+            self.vlog("Got human filesize for '%s': %s" % (self.filename, self._human_filesize))
 
         return self._human_filesize
 
@@ -149,20 +163,24 @@ class Song(object):
 
         return r.content
 
+    def vlog(self, text):
+        if self.verbose:
+            print text
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('VIP Playlist Downloader')
+    parser = argparse.ArgumentParser('VIP Playlist Downloader', epilog='Epilog text')
 
-    parser.add_argument('-v', '--verbose', help='Output extra information', action='store_true', dest='verbose')
-    parser.add_argument('-l', '--list', help='List files only, no download', action='store_true', dest='listonly')
-    parser.add_argument('-f', '--folder', help='Download destination folder', default='VIP Playlist', dest='dl_folder')
-    parser.add_argument('-p', '--playlist', help='Which playlist to download', choices=['normal', 'source', 'mellow', 'exiled'], default='normal', dest='dl_playlist')
+    parser.add_argument('-c', '--check-size', help='Verify local file matches remote file', action='store_true', dest='dl_sizecheck')
     parser.add_argument('-d', '--download-method', help='Which download method to use', choices=['fancy', 'boring'], default='fancy', dest='dl_method')
-    parser.add_argument('-o', '--overwrite', help='Download files that would be skipped', action='store_true', dest='dl_overwrite')
-    parser.add_argument('-r', '--no-redownload', help='Do not redownload files that differ in size from the remote file', action='store_true', dest='dl_noredownload')
+    parser.add_argument('-f', '--folder', help='Download destination folder', default='VIP Playlist', dest='dl_folder')
+    parser.add_argument('-l', '--list', help='List files only, no download', action='store_true', dest='listonly')
     parser.add_argument('-n', '--no-namehacks', help='Do not apply namehacks', action='store_true', dest='dl_nonamehacks')
-    parser.add_argument('-s', '--skip-size-check', help='Skip checking for remote filesize match', action='store_true', dest='dl_skipsizecheck')
+    parser.add_argument('-o', '--overwrite', help='Download files that would be skipped', action='store_true', dest='dl_overwrite')
+    parser.add_argument('-p', '--playlist', help='Which playlist to download', choices=['normal', 'source', 'mellow', 'exiled', 'anime'], default='normal', dest='dl_playlist')
+    parser.add_argument('-r', '--no-redownload', help='Do not redownload files that differ in size from the remote file', action='store_true', dest='dl_noredownload')
+    parser.add_argument('-v', '--verbose', help='Output extra information', action='store_true', dest='verbose')
+    parser.add_argument('-V', '--version', help='Print version and exit', action='store_true', dest='version')
 
     # TODO: Add:
     #   alternate XML roster location/ remove normal playlist assumptions
@@ -181,14 +199,16 @@ if __name__ == '__main__':
             'normal': 'http://vip.aersia.net/roster.xml',
             'source': 'http://vip.aersia.net/roster-source.xml',
             'mellow': 'http://vip.aersia.net/roster-mellow.xml',
-            'exiled': 'http://vip.aersia.net/roster-exiled.xml'
+            'exiled': 'http://vip.aersia.net/roster-exiled.xml',
+            'anime':  'http://wap.aersia.net/roster.xml'
         }
 
         rosteroffsets = {
             'normal': (4, -1),
             'source': (4, -1),
             'mellow': (3, -2),
-            'exiled': (1, None)
+            'exiled': (1, None),
+            'anime':  (3, None)
         }
 
         xmlroster = rosternames[clargs.dl_playlist]
@@ -234,7 +254,7 @@ if __name__ == '__main__':
                     raise Exception # Silly hack but it works
 
                 if song.filename in os.listdir(clargs.dl_folder):
-                    if not clargs.dl_skipsizecheck:
+                    if clargs.dl_sizecheck:
                         songsmatch = os.path.getsize(os.path.join(clargs.dl_folder, song.filename)) == song.filesize
                     else:
                         songsmatch = True
@@ -263,6 +283,11 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print "\nControl C caught, exiting."
 
+    except Exception as e:
+        print e
+
     finally:
-        tdsize = 'GB' if total_song_data_size >= 1000000000 else 'MB'
-        print "Total data downloaded: %s %s" % (getPrettyFileSizes(total_song_data_size, tdsize), tdsize)
+        # tdsize = 'GB' if total_song_data_size >= 1000000000 else 'MB'
+        # print "Total data downloaded: %s %s" % (getPrettyFileSizes(total_song_data_size, tdsize), tdsize)
+        print "Total data downloaded: %s %s" % getPrettyFileSizes(total_song_data_size)
+
