@@ -1,0 +1,1 @@
+D:\Pythons\pyuic4.bat.lnk -xo D:\Pythons\VIP-Playlist-Downloader\ui\ui.py D:\Pythons\VIP-Playlist-Downloader\ui\vip.ui

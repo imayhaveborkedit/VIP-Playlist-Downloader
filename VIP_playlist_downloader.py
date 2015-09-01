@@ -1,15 +1,20 @@
 from ctypes import windll, create_string_buffer
 import xml.etree.ElementTree as ET
-import sys, os, os.path, math, requests, urllib2, struct, argparse, re
+import sys, os, os.path, requests, urllib2, struct, argparse, re
 
-# EVENTUAL TRANSCODING WILL USE THIS: https://github.com/devsnd/python-audiotranscode
+# EVENTUAL? TRANSCODING WILL USE THIS: https://github.com/devsnd/python-audiotranscode
+# use mutagen
 
 namehacks = {
     # trailing dot
     '\.{2,}m4a': '.m4a',
 
+    # extra spaces
+    '\s{2,}': ' ',
+
     # .dothack
     '^\.hack': 'dothack',
+    '^dothack': 'dothack - ', # Maybe this is what I wanted?
     # '^dothack\S': 'dothack - ', # kasdjfkajsbdflkbsadf
 
     # Original Version despacing & parenthesizing
@@ -110,6 +115,11 @@ def download_song(song, total_songs, current_song, location='', legacy=False):
 def apply_namehacks(filename):
     for hack in namehacks:
         filename = re.sub(hack, namehacks[hack], filename)
+
+    # Do this twice because whatever
+    for hack in namehacks:
+        filename = re.sub(hack, namehacks[hack], filename)
+
     return filename
 
 
@@ -125,11 +135,11 @@ class Song(object):
 
         self.filename = creator + ' - ' + title + '.m4a'
         self.raw_filename = self.filename
-        self.vlog("Creating filename: %s -> %s" % (self.location, self.filename))
+        self.vlog("Creating filename: %s ->\n %s" % (self.location, self.filename))
 
         self.filename = self.filename.replace('"',"'")
         self.filename = ''.join([c for c in self.filename if c not in '\/:*?<>|'])
-        self.vlog("Sanitizing filename: %s -> %s" % (self.raw_filename, self.filename))
+        self.vlog("Sanitizing filename: %s ->\n %s\n" % (self.raw_filename, self.filename))
 
         self._filesize = None
         self._human_filesize = None
@@ -180,11 +190,10 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--playlist', help='Which playlist to download', choices=['normal', 'source', 'mellow', 'exiled', 'anime'], default='normal', dest='dl_playlist')
     parser.add_argument('-r', '--no-redownload', help='Do not redownload files that differ in size from the remote file', action='store_true', dest='dl_noredownload')
     parser.add_argument('-v', '--verbose', help='Output extra information', action='store_true', dest='verbose')
-    parser.add_argument('-V', '--version', help='Print version and exit', action='store_true', dest='version')
+    # parser.add_argument('-V', '--version', help='Print version and exit', action='store_true', dest='version')
 
     # TODO: Add:
     #   alternate XML roster location/ remove normal playlist assumptions
-
 
     clargs = parser.parse_args()
 
@@ -214,7 +223,6 @@ if __name__ == '__main__':
         xmlroster = rosternames[clargs.dl_playlist]
         rosteroffset = rosteroffsets[clargs.dl_playlist]
 
-
         roster = requests.get(xmlroster)
         treeroot = ET.fromstring(roster.text.replace('xmlns="http://xspf.org/ns/0/"',''))
 
@@ -230,11 +238,12 @@ if __name__ == '__main__':
             song_title = track.find('title').text
             song_location = track.find('location').text
 
-            song = Song(song_creator, song_title, song_location)
+            song = Song(song_creator, song_title, song_location, verbose=clargs.verbose)
 
             if not clargs.dl_nonamehacks:
                 oldfilename = song.filename
                 song.filename = apply_namehacks(song.filename)
+
                 if song.filename != oldfilename:
                     if clargs.verbose:
                         print "Applied namehack:\n%s ->\n%s\n" % (oldfilename, song.filename)
