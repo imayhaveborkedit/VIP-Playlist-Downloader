@@ -177,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--list', help='List files only, no download', action='store_true', dest='listonly')
     parser.add_argument('-n', '--no-namehacks', help='Do not apply namehacks', action='store_true', dest='dl_nonamehacks')
     parser.add_argument('-o', '--overwrite', help='Download files that would be skipped', action='store_true', dest='dl_overwrite')
-    parser.add_argument('-p', '--playlist', help='Which playlist to download', choices=['normal', 'source', 'mellow', 'exiled', 'anime'], default='normal', dest='dl_playlist')
+    parser.add_argument('-p', '--playlist', help='Which playlist to download', choices=['normal', 'source', 'mellow', 'exiled', 'anime', 'couch'], default='normal', dest='dl_playlist')
     parser.add_argument('-r', '--no-redownload', help='Do not redownload files that differ in size from the remote file', action='store_true', dest='dl_noredownload')
     parser.add_argument('-v', '--verbose', help='Output extra information', action='store_true', dest='verbose')
     parser.add_argument('-V', '--version', help='Print version and exit', action='store_true', dest='version')
@@ -200,7 +200,8 @@ if __name__ == '__main__':
             'source': 'http://vip.aersia.net/roster-source.xml',
             'mellow': 'http://vip.aersia.net/roster-mellow.xml',
             'exiled': 'http://vip.aersia.net/roster-exiled.xml',
-            'anime':  'http://wap.aersia.net/roster.xml'
+            'anime':  'http://wap.aersia.net/roster.xml',
+            'couch':  'http://cpp.aersia.net/roster.xml'
         }
 
         rosteroffsets = {
@@ -208,7 +209,8 @@ if __name__ == '__main__':
             'source': (4, -1),
             'mellow': (3, -2),
             'exiled': (1, None),
-            'anime':  (3, None)
+            'anime':  (3, None),
+            'couch':  (1, None)
         }
 
         xmlroster = rosternames[clargs.dl_playlist]
